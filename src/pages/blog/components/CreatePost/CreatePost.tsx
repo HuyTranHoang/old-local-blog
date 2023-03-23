@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import { Post } from 'types/blog.type'
 import { useDispatch, useSelector } from 'react-redux'
-import { addPost, cancelEditingPost, finishEditingPost } from '../../blog.reducer'
+import { addPost, cancelEditingPost, finishEditingPost } from '../../blog.slice'
 import { RootState } from '../../../../store'
 
 const initialState: Post = {
@@ -27,8 +27,7 @@ export default function CreatePost() {
     if (editingPost) {
       dispatch(finishEditingPost(formData))
     } else {
-      const formDataWithId = { ...formData, id: new Date().toISOString() }
-      dispatch(addPost(formDataWithId))
+      dispatch(addPost(formData))
     }
     setFormData(initialState)
   }
@@ -40,7 +39,11 @@ export default function CreatePost() {
   return (
     <form onSubmit={handleSubmit} onReset={handleCancelEditingPost}>
       <div className='mb-6'>
-        <label htmlFor='title' className='mb-2 block text-sm font-medium text-gray-900 dark:text-gray-300'>
+        <label
+          htmlFor='title'
+          className='mb-2 block text-sm font-medium text-gray-900 dark:text-gray-300'
+          onClick={() => dispatch({ type: 'blog/click' })}
+        >
           Title
         </label>
         <input
