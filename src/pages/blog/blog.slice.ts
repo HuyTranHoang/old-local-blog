@@ -1,15 +1,25 @@
-import { createAsyncThunk, createSlice, current, PayloadAction } from '@reduxjs/toolkit'
+import { createAsyncThunk, createSlice, current, PayloadAction, AsyncThunk } from '@reduxjs/toolkit'
 import http from 'utils/http'
 import { Post } from '../../types/blog.type'
+
+type GenericAsyncThunk = AsyncThunk<unknown, unknown, any>
+
+type PendingAction = ReturnType<GenericAsyncThunk['pending']>
+type RejectedAction = ReturnType<GenericAsyncThunk['rejected']>
+type FulfilledAction = ReturnType<GenericAsyncThunk['fulfilled']>
 
 interface BlogState {
   postList: Post[]
   editingPost: Post | null
+  loading: boolean
+  currentReuqestId: undefined | string
 }
 
 const initialState: BlogState = {
   postList: [],
-  editingPost: null
+  editingPost: null,
+  loading: false,
+  currentReuqestId: undefined
 }
 
 export const getPostList = createAsyncThunk('blog/getPostList', async (_, thunkAPI) => {
@@ -20,19 +30,33 @@ export const getPostList = createAsyncThunk('blog/getPostList', async (_, thunkA
 })
 
 export const addPost = createAsyncThunk('blog/addPost', async (body: Omit<Post, 'id'>, thunkAPI) => {
-  const response = await http.post<Post>('posts', body, {
-    signal: thunkAPI.signal
-  })
-  return response.data
+  try {
+    const response = await http.post<Post>('posts', body, {
+      signal: thunkAPI.signal
+    })
+    return response.data
+  } catch (error: any) {
+    if (error.name === 'AxiosError' && error.response.status === 422) {
+      return thunkAPI.rejectWithValue(error.response.data)
+    }
+    throw error
+  }
 })
 
 export const updatePost = createAsyncThunk(
   'blog/updatePost',
   async ({ postId, body }: { postId: string; body: Post }, thunkAPI) => {
-    const response = await http.put<Post>(`posts/${postId}`, body, {
-      signal: thunkAPI.signal
-    })
-    return response.data
+    try {
+      const response = await http.put<Post>(`posts/${postId}`, body, {
+        signal: thunkAPI.signal
+      })
+      return response.data
+    } catch (error: any) {
+      if (error.name === 'AxiosError' && error.response.status === 422) {
+        return thunkAPI.rejectWithValue(error.response.data)
+      }
+      throw error
+    }
   }
 )
 
@@ -81,14 +105,24 @@ const blogSlice = createSlice({
           state.postList.splice(deletePostIndex, 1)
         }
       })
-      .addMatcher(
-        (action) => action.type.includes('cancel'),
+      .addMatcher<PendingAction>(
+        (action) => action.type.endsWith('/pending'),
         (state, action) => {
-          console.log(current(state))
+          state.loading = true
+          state.currentReuqestId = action.meta.requestId
+        }
+      )
+      .addMatcher<RejectedAction | FulfilledAction>(
+        (action) => action.type.endsWith('/rejected') || action.type.endsWith('/fulfilled'),
+        (state, action) => {
+          if (state.loading && state.currentReuqestId === action.meta.requestId) {
+            state.loading = false
+            state.currentReuqestId = undefined
+          }
         }
       )
       .addDefaultCase((state, action) => {
-        console.log(`action type: ${action.type}`, current(state))
+        // console.log(`action type: ${action.type}`, current(state))
       })
   }
 })
